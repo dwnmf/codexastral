@@ -37,11 +37,17 @@ import {
   updateCompletionCheck,
   updateLoopNotification,
 } from "./loopndroll";
+import { LOOPNDROLL_HOOK_CLI_FLAG } from "./platform-runtime";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://127.0.0.1:${DEV_SERVER_PORT}`;
 const DEV_SERVER_WAIT_MS = 15000;
 const DEV_SERVER_RETRY_MS = 250;
+
+if (process.argv.includes(LOOPNDROLL_HOOK_CLI_FLAG)) {
+  await import("./hook-runtime-entry.ts");
+  process.exit(0);
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -511,22 +517,27 @@ function getAppRpcRequestHandlers() {
   };
 }
 
-function getLoopndrollRpcRequestHandlers() {
+function getLoopndrollCrudHandlers() {
   return {
     ensureLoopndrollSetup,
     getLoopndrollState: getLoopndrollSnapshot,
+    registerHooks,
+    clearHooks,
+    revealHooksFile,
+  };
+}
+
+function getLoopndrollNotificationHandlers() {
+  return {
     saveDefaultPrompt({ defaultPrompt }: { defaultPrompt: string }) {
       return saveDefaultPrompt(defaultPrompt);
     },
-    createNotification({ notification }: { notification: Parameters<typeof createLoopNotification>[0] }) {
-      return createLoopNotification(notification);
-    },
-    createCompletionCheck({
-      completionCheck,
+    createNotification({
+      notification,
     }: {
-      completionCheck: Parameters<typeof createCompletionCheck>[0];
+      notification: Parameters<typeof createLoopNotification>[0];
     }) {
-      return createCompletionCheck(completionCheck);
+      return createLoopNotification(notification);
     },
     getTelegramChats({ botToken, waitForUpdates }: { botToken: string; waitForUpdates?: boolean }) {
       return fetchTelegramChats(botToken, waitForUpdates);
@@ -538,6 +549,33 @@ function getLoopndrollRpcRequestHandlers() {
     }) {
       return updateLoopNotification(notification);
     },
+    deleteNotification({ notificationId }: { notificationId: string }) {
+      return deleteLoopNotification(notificationId);
+    },
+    setGlobalNotification({ notificationId }: { notificationId: string | null }) {
+      return setGlobalNotification(notificationId);
+    },
+    setSessionNotifications({
+      sessionId,
+      notificationIds,
+    }: {
+      sessionId: string;
+      notificationIds: string[];
+    }) {
+      return persistSessionNotifications(sessionId, notificationIds);
+    },
+  };
+}
+
+function getLoopndrollCompletionCheckHandlers() {
+  return {
+    createCompletionCheck({
+      completionCheck,
+    }: {
+      completionCheck: Parameters<typeof createCompletionCheck>[0];
+    }) {
+      return createCompletionCheck(completionCheck);
+    },
     updateCompletionCheck({
       completionCheck,
     }: {
@@ -545,23 +583,8 @@ function getLoopndrollRpcRequestHandlers() {
     }) {
       return updateCompletionCheck(completionCheck);
     },
-    setSessionNotifications({ sessionId, notificationIds }: { sessionId: string; notificationIds: string[] }) {
-      return persistSessionNotifications(sessionId, notificationIds);
-    },
-    deleteNotification({ notificationId }: { notificationId: string }) {
-      return deleteLoopNotification(notificationId);
-    },
     deleteCompletionCheck({ completionCheckId }: { completionCheckId: string }) {
       return deleteCompletionCheck(completionCheckId);
-    },
-    setLoopScope({ scope }: { scope: Parameters<typeof setLoopScope>[0] }) {
-      return setLoopScope(scope);
-    },
-    setGlobalPreset({ preset }: { preset: Parameters<typeof setGlobalPreset>[0] }) {
-      return setGlobalPreset(preset);
-    },
-    setGlobalNotification({ notificationId }: { notificationId: string | null }) {
-      return setGlobalNotification(notificationId);
     },
     setGlobalCompletionCheckConfig({
       completionCheckId,
@@ -571,9 +594,6 @@ function getLoopndrollRpcRequestHandlers() {
       waitForReplyAfterCompletion: boolean;
     }) {
       return setGlobalCompletionCheckConfig(completionCheckId, waitForReplyAfterCompletion);
-    },
-    setSessionPreset({ sessionId, preset }: { sessionId: string; preset: Parameters<typeof setSessionPreset>[1] }) {
-      return setSessionPreset(sessionId, preset);
     },
     setSessionCompletionCheckConfig({
       sessionId,
@@ -590,15 +610,41 @@ function getLoopndrollRpcRequestHandlers() {
         waitForReplyAfterCompletion,
       );
     },
+  };
+}
+
+function getLoopndrollSessionHandlers() {
+  return {
+    setLoopScope({ scope }: { scope: Parameters<typeof setLoopScope>[0] }) {
+      return setLoopScope(scope);
+    },
+    setGlobalPreset({ preset }: { preset: Parameters<typeof setGlobalPreset>[0] }) {
+      return setGlobalPreset(preset);
+    },
+    setSessionPreset({
+      sessionId,
+      preset,
+    }: {
+      sessionId: string;
+      preset: Parameters<typeof setSessionPreset>[1];
+    }) {
+      return setSessionPreset(sessionId, preset);
+    },
     setSessionArchived({ sessionId, archived }: { sessionId: string; archived: boolean }) {
       return persistSessionArchived(sessionId, archived);
     },
     deleteSession({ sessionId }: { sessionId: string }) {
       return deleteSession(sessionId);
     },
-    registerHooks,
-    clearHooks,
-    revealHooksFile,
+  };
+}
+
+function getLoopndrollRpcRequestHandlers() {
+  return {
+    ...getLoopndrollCrudHandlers(),
+    ...getLoopndrollNotificationHandlers(),
+    ...getLoopndrollCompletionCheckHandlers(),
+    ...getLoopndrollSessionHandlers(),
   };
 }
 

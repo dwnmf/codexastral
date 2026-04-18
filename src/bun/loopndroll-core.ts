@@ -12,12 +12,13 @@ import type {
   LoopSession,
   LoopSessionPresetSource,
 } from "../shared/app-rpc";
-import {
-  LOOP_PRESET_VALUES,
-  LOOP_SCOPE_VALUES,
-  LOOP_SESSION_SOURCE_VALUES,
-} from "./constants";
+import { LOOP_PRESET_VALUES, LOOP_SCOPE_VALUES, LOOP_SESSION_SOURCE_VALUES } from "./constants";
 import { getLoopndrollDatabase } from "./db/client";
+import {
+  type LoopndrollRuntimeMode,
+  getLoopndrollAppDirectoryPath,
+  getManagedHookRuntimePaths,
+} from "./platform-runtime";
 import {
   completionChecks,
   notifications,
@@ -44,18 +45,20 @@ export type HooksDocument = {
 };
 
 export type LoopndrollPaths = {
+  runtimeMode: LoopndrollRuntimeMode;
+  appExecutablePath: string;
   appDirectoryPath: string;
   binDirectoryPath: string;
   logsDirectoryPath: string;
   databasePath: string;
   managedHookPath: string;
+  managedHookRuntimePath: string | null;
   hookDebugLogPath: string;
   codexDirectoryPath: string;
   codexConfigPath: string;
   codexHooksPath: string;
 };
 
-const APP_SUPPORT_DIRECTORY_NAME = "loopndroll";
 export const MANAGED_HOOK_MARKER = "--managed-by loopndroll";
 export const MANAGED_HOOK_SCRIPT_MARKER = "managed-by loopndroll";
 export const HOOK_DEBUG_LOG_ENV_NAME = "LOOPNDROLL_ENABLE_HOOK_DEBUG_LOGS";
@@ -85,23 +88,27 @@ export const AWAIT_REPLY_POLL_INTERVAL_MS = 500;
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 export const TELEGRAM_NOTIFICATION_FOOTER =
   "Reply to this message in Telegram to continue this Codex chat.";
-export const TELEGRAM_ALLOWED_UPDATES = ["message", "channel_post", "my_chat_member", "chat_member"];
+export const TELEGRAM_ALLOWED_UPDATES = [
+  "message",
+  "channel_post",
+  "my_chat_member",
+  "chat_member",
+];
 
 export function getLoopndrollPaths(): LoopndrollPaths {
-  const appDirectoryPath = join(
-    homedir(),
-    "Library",
-    "Application Support",
-    APP_SUPPORT_DIRECTORY_NAME,
-  );
+  const appDirectoryPath = getLoopndrollAppDirectoryPath();
   const codexDirectoryPath = join(homedir(), ".codex");
+  const hookRuntimePaths = getManagedHookRuntimePaths(appDirectoryPath);
 
   return {
+    runtimeMode: hookRuntimePaths.runtimeMode,
+    appExecutablePath: hookRuntimePaths.appExecutablePath,
     appDirectoryPath,
-    binDirectoryPath: join(appDirectoryPath, "bin"),
+    binDirectoryPath: hookRuntimePaths.binDirectoryPath,
     logsDirectoryPath: join(appDirectoryPath, "logs"),
     databasePath: join(appDirectoryPath, "app.db"),
-    managedHookPath: join(appDirectoryPath, "bin", "loopndroll-hook"),
+    managedHookPath: hookRuntimePaths.managedHookPath,
+    managedHookRuntimePath: hookRuntimePaths.managedHookRuntimePath,
     hookDebugLogPath: join(appDirectoryPath, "logs", "hooks-debug.jsonl"),
     codexDirectoryPath,
     codexConfigPath: join(codexDirectoryPath, "config.toml"),
@@ -460,7 +467,10 @@ export function notificationInsertFromValue(
   };
 }
 
-export function buildNewSession(sessionId: string, sessionRef: string): typeof sessions.$inferInsert {
+export function buildNewSession(
+  sessionId: string,
+  sessionRef: string,
+): typeof sessions.$inferInsert {
   const timestamp = nowIsoString();
 
   return {

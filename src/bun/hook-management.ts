@@ -1,10 +1,15 @@
-import { spawn } from "node:child_process";
-import { chmod, copyFile, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import type { LoopndrollSnapshot } from "../shared/app-rpc";
 import { getLoopndrollDatabase } from "./db/client";
 import { settings } from "./db/schema";
 import { buildManagedHookScript } from "./managed-hook-script";
+import {
+  buildManagedHookCommand,
+  ensureManagedHookArtifacts,
+  hasManagedHookArtifacts,
+  revealPathInFileManager,
+} from "./platform-runtime";
 import {
   type HookMatcherGroup,
   MANAGED_HOOK_MARKER,
@@ -93,10 +98,6 @@ async function ensureCodexConfig(paths: LoopndrollPaths) {
   }
 }
 
-function quoteCommandPath(path: string) {
-  return `'${path.replaceAll("'", `'\\''`)}'`;
-}
-
 function isManagedHookCommand(command: string | undefined) {
   return typeof command === "string" && command.includes(MANAGED_HOOK_MARKER);
 }
@@ -131,7 +132,7 @@ function upsertManagedHooks(paths: LoopndrollPaths, hooksDocument: HooksDocument
 
   removeManagedHooks(hooksDocument);
 
-  const command = `${quoteCommandPath(paths.managedHookPath)} --hook ${MANAGED_HOOK_MARKER}`;
+  const command = buildManagedHookCommand(paths, MANAGED_HOOK_MARKER);
 
   hooksDocument.hooks.SessionStart = [
     ...(hooksDocument.hooks.SessionStart ?? []),
@@ -177,23 +178,18 @@ function upsertManagedHooks(paths: LoopndrollPaths, hooksDocument: HooksDocument
 
 async function ensureManagedHookScript(paths: LoopndrollPaths) {
   await ensureDirectory(paths.binDirectoryPath);
-  const existingContent = await readFile(paths.managedHookPath, "utf8").catch(() => null);
-  if (existingContent && !existingContent.includes(MANAGED_HOOK_SCRIPT_MARKER)) {
-    const backupPath = `${paths.managedHookPath}.bak.${Date.now()}`;
-    await copyFile(paths.managedHookPath, backupPath);
-  }
-
-  await writeFile(paths.managedHookPath, buildManagedHookScript(paths), "utf8");
-  await chmod(paths.managedHookPath, 0o755);
+  await ensureManagedHookArtifacts(
+    paths,
+    buildManagedHookScript({ includeShebang: process.platform !== "win32" }),
+    MANAGED_HOOK_SCRIPT_MARKER,
+  );
 }
 
 async function computeHealth(paths: LoopndrollPaths) {
   const issues: string[] = [];
   const configContents = await readFile(paths.codexConfigPath, "utf8").catch(() => null);
   const hooksDocument = await loadHooksDocument(paths);
-  const scriptExists = await stat(paths.managedHookPath)
-    .then(() => true)
-    .catch(() => false);
+  const managedHookExists = await hasManagedHookArtifacts(paths);
   const hookEvents = hooksDocument.hooks ?? {};
   const hasManagedSessionStart = (hookEvents.SessionStart ?? []).some((group) =>
     (group.hooks ?? []).some((hook) => isManagedHookCommand(hook.command)),
@@ -217,7 +213,7 @@ async function computeHealth(paths: LoopndrollPaths) {
   if (!hasManagedUserPromptSubmit) {
     issues.push("Managed UserPromptSubmit hook is not registered.");
   }
-  if (!scriptExists) {
+  if (!managedHookExists) {
     issues.push("Managed hook executable is missing.");
   }
 
@@ -302,13 +298,7 @@ export async function clearHooks() {
 export async function revealHooksFile() {
   const paths = getLoopndrollPaths();
   await ensureDirectory(paths.codexDirectoryPath);
-
-  const child = spawn("open", ["-R", paths.codexHooksPath], {
-    stdio: "ignore",
-    detached: true,
-  });
-
-  child.unref();
+  await revealPathInFileManager(paths.codexHooksPath);
 
   return {
     revealed: true,

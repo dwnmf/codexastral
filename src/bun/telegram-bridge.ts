@@ -483,7 +483,6 @@ function upsertSessionRemotePrompt(
   return true;
 }
 
-
 type TelegramBridgeUpdateContext = {
   paths: LoopndrollPaths;
   db: Database;
@@ -542,10 +541,7 @@ async function prepareTelegramBridgeUpdate(context: TelegramBridgeUpdateContext)
   return true;
 }
 
-function formatTelegramSessionLabel(targetSession: {
-  sessionRef: string;
-  title: string | null;
-}) {
+function formatTelegramSessionLabel(targetSession: { sessionRef: string; title: string | null }) {
   return `[${targetSession.sessionRef}]${targetSession.title ? ` - ${targetSession.title}` : ""}`;
 }
 
@@ -608,7 +604,11 @@ async function handleHelpCommand(context: TelegramBridgeUpdateContext) {
 async function handleReplyCommand(context: TelegramBridgeUpdateContext) {
   const parsedReply = parseReplyCommand(context.trimmedText);
   if (!parsedReply) {
-    await sendTelegramBridgeMessage(context.botToken, context.chatId, "Usage: /reply C12 your message");
+    await sendTelegramBridgeMessage(
+      context.botToken,
+      context.chatId,
+      "Usage: /reply C12 your message",
+    );
     await appendHookDebugLog(context.paths, {
       type: "telegram-bridge",
       action: "reply-usage",

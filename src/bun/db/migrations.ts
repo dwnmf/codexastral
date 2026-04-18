@@ -705,11 +705,7 @@ function nowIsoString() {
   return new Date().toISOString();
 }
 
-function shouldIgnoreMigrationStatementError(
-  sqlite: Database,
-  statement: string,
-  error: unknown,
-) {
+function shouldIgnoreMigrationStatementError(sqlite: Database, statement: string, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   if (!message.toLowerCase().includes("duplicate column name:")) {
     return false;

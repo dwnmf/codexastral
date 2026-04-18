@@ -182,7 +182,11 @@ function readKnownTelegramChats(db: Database, botToken: string): TelegramChatOpt
   }));
 }
 
-export function upsertKnownTelegramChats(db: Database, botToken: string, chats: TelegramChatOption[]) {
+export function upsertKnownTelegramChats(
+  db: Database,
+  botToken: string,
+  chats: TelegramChatOption[],
+) {
   if (chats.length === 0) {
     return;
   }
@@ -277,7 +281,10 @@ export async function getTelegramChats(
   return readKnownTelegramChats(client, normalizedBotToken);
 }
 
-export async function fetchTelegramUpdates(botToken: string, offset?: number): Promise<TelegramUpdate[]> {
+export async function fetchTelegramUpdates(
+  botToken: string,
+  offset?: number,
+): Promise<TelegramUpdate[]> {
   const params = new URLSearchParams();
   if (typeof offset === "number") {
     params.set("offset", String(offset));
