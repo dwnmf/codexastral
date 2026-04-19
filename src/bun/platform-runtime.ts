@@ -127,7 +127,11 @@ async function ensureWindowsLauncher(paths: ManagedHookRuntimePaths) {
     throw new Error("Managed hook runtime path is missing for Windows development mode.");
   }
 
-  const launcher = ["@echo off", `bun ${quoteWindowsArgument(runtimePath)} %*`, ""].join("\r\n");
+  const launcher = [
+    "@echo off",
+    `${quoteWindowsArgument(paths.appExecutablePath)} ${quoteWindowsArgument(runtimePath)} %*`,
+    "",
+  ].join("\r\n");
 
   await writeFile(paths.managedHookPath, launcher, "utf8");
 }
