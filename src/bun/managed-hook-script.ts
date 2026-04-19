@@ -7,21 +7,27 @@ type BuildManagedHookScriptInput = {
   includeShebang: boolean;
 };
 
-function getRepositoryRootFromExecutablePath() {
-  return dirname(dirname(dirname(dirname(process.execPath))));
+function getHookRuntimeEntryCandidatesFromExecutablePath(maxLevels = 8) {
+  const candidates: string[] = [];
+  let currentDirectory = dirname(process.execPath);
+
+  for (let level = 0; level < maxLevels; level += 1) {
+    candidates.push(join(currentDirectory, "src", "bun", "hook-runtime-entry.ts"));
+    const parentDirectory = dirname(currentDirectory);
+    if (parentDirectory === currentDirectory) {
+      break;
+    }
+    currentDirectory = parentDirectory;
+  }
+
+  return candidates;
 }
 
 function getHookRuntimeEntryCandidates() {
   const bundledCandidate = fileURLToPath(new URL("./hook-runtime-entry.ts", import.meta.url));
   const cwdCandidate = join(process.cwd(), "src", "bun", "hook-runtime-entry.ts");
-  const executableCandidate = join(
-    getRepositoryRootFromExecutablePath(),
-    "src",
-    "bun",
-    "hook-runtime-entry.ts",
-  );
 
-  return [bundledCandidate, cwdCandidate, executableCandidate];
+  return [bundledCandidate, cwdCandidate, ...getHookRuntimeEntryCandidatesFromExecutablePath()];
 }
 
 function resolveHookRuntimeEntryModuleUrl() {

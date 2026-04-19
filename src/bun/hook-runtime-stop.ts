@@ -225,17 +225,10 @@ export function toHookStopOutput(stopDecision) {
     return null;
   }
 
-  if (stopDecision.continue === false) {
-    return {
-      continue: false,
-      stopReason: typeof stopDecision.stopReason === "string" ? stopDecision.stopReason : undefined,
-    };
-  }
-
   if (stopDecision.decision === "block" && typeof stopDecision.reason === "string") {
     return {
       decision: "block",
-      reason: stopDecision.reason,
+      justification: stopDecision.reason,
     };
   }
 
