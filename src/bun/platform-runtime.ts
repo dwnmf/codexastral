@@ -49,22 +49,23 @@ export function getManagedHookRuntimePaths(appDirectoryPath: string): ManagedHoo
   const runtimeMode = getLoopndrollRuntimeMode();
   const binDirectoryPath = join(appDirectoryPath, "bin");
 
+  if (process.platform === "win32") {
+    return {
+      appExecutablePath: process.execPath,
+      binDirectoryPath,
+      managedHookPath: join(binDirectoryPath, "loopndroll-hook.cmd"),
+      managedHookRuntimePath:
+        runtimeMode === "development" ? join(binDirectoryPath, "loopndroll-hook.mjs") : null,
+      runtimeMode,
+    };
+  }
+
   if (runtimeMode === "packaged") {
     return {
       appExecutablePath: process.execPath,
       binDirectoryPath,
       managedHookPath: process.execPath,
       managedHookRuntimePath: null,
-      runtimeMode,
-    };
-  }
-
-  if (process.platform === "win32") {
-    return {
-      appExecutablePath: process.execPath,
-      binDirectoryPath,
-      managedHookPath: join(binDirectoryPath, "loopndroll-hook.cmd"),
-      managedHookRuntimePath: join(binDirectoryPath, "loopndroll-hook.mjs"),
       runtimeMode,
     };
   }
@@ -118,22 +119,37 @@ async function ensureManagedRuntimeScript(
 }
 
 async function ensureWindowsLauncher(paths: ManagedHookRuntimePaths) {
-  if (paths.runtimeMode !== "development" || process.platform !== "win32") {
+  if (process.platform !== "win32") {
     return;
   }
 
+  const launcher =
+    paths.runtimeMode === "development"
+      ? buildDevelopmentWindowsLauncher(paths)
+      : buildPackagedWindowsLauncher(paths);
+
+  await writeFile(paths.managedHookPath, launcher, "utf8");
+}
+
+function buildDevelopmentWindowsLauncher(paths: ManagedHookRuntimePaths) {
   const runtimePath = paths.managedHookRuntimePath;
   if (!runtimePath) {
     throw new Error("Managed hook runtime path is missing for Windows development mode.");
   }
 
-  const launcher = [
+  return [
     "@echo off",
-    `${quoteWindowsArgument(paths.appExecutablePath)} ${quoteWindowsArgument(runtimePath)} %*`,
+    `${quoteWindowsArgument(paths.appExecutablePath)} ${quoteWindowsArgument(runtimePath)}`,
     "",
   ].join("\r\n");
+}
 
-  await writeFile(paths.managedHookPath, launcher, "utf8");
+function buildPackagedWindowsLauncher(paths: ManagedHookRuntimePaths) {
+  return [
+    "@echo off",
+    `${quoteWindowsArgument(paths.appExecutablePath)} ${LOOPNDROLL_HOOK_CLI_FLAG}`,
+    "",
+  ].join("\r\n");
 }
 
 export async function ensureManagedHookArtifacts(
@@ -141,11 +157,13 @@ export async function ensureManagedHookArtifacts(
   scriptContents: string,
   managedHookScriptMarker: string,
 ) {
-  if (paths.runtimeMode !== "development") {
+  if (paths.runtimeMode !== "development" && process.platform !== "win32") {
     return;
   }
 
-  await ensureManagedRuntimeScript(paths, scriptContents, managedHookScriptMarker);
+  if (paths.runtimeMode === "development") {
+    await ensureManagedRuntimeScript(paths, scriptContents, managedHookScriptMarker);
+  }
   await ensureWindowsLauncher(paths);
 }
 
@@ -157,7 +175,11 @@ export async function hasManagedHookArtifacts(paths: ManagedHookRuntimePaths) {
     return false;
   }
 
-  if (paths.runtimeMode !== "development" || process.platform !== "win32") {
+  if (process.platform !== "win32") {
+    return true;
+  }
+
+  if (paths.runtimeMode !== "development") {
     return true;
   }
 
@@ -168,6 +190,10 @@ export async function hasManagedHookArtifacts(paths: ManagedHookRuntimePaths) {
 }
 
 export function buildManagedHookCommand(paths: ManagedHookRuntimePaths, managedHookMarker: string) {
+  if (process.platform === "win32") {
+    return quoteCommandArgument(paths.managedHookPath);
+  }
+
   if (paths.runtimeMode === "packaged") {
     return buildCommandString(paths.managedHookPath, [LOOPNDROLL_HOOK_CLI_FLAG, managedHookMarker]);
   }

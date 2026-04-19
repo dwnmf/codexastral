@@ -99,7 +99,10 @@ async function ensureCodexConfig(paths: LoopndrollPaths) {
 }
 
 function isManagedHookCommand(command: string | undefined) {
-  return typeof command === "string" && command.includes(MANAGED_HOOK_MARKER);
+  return (
+    typeof command === "string" &&
+    (command.includes(MANAGED_HOOK_MARKER) || command.includes("loopndroll-hook"))
+  );
 }
 
 function removeManagedHooks(hooksDocument: HooksDocument) {
